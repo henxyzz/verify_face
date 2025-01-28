@@ -1,0 +1,20 @@
+body {
+    background: #0f0f23;
+    color: #00ffcc;
+    font-family: 'Courier New', Courier, monospace;
+    text-align: center;
+}
+
+button {
+    background: #00ffcc;
+    color: #0f0f23;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+video {
+    margin-top: 20px;
+    border: 3px solid #00ffcc;
+}
