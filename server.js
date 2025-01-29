@@ -6,7 +6,7 @@ const faceapi = require('@vladmandic/face-api');
 const canvas = require('canvas');
 
 const app = express();
-const PORT = 9090;
+const PORT = 8080;
 
 // Middleware
 // Route untuk akses halaman scan.html
