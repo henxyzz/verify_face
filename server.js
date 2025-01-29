@@ -2,13 +2,32 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const bodyParser = require('body-parser');
+const faceapi = require('@vladmandic/face-api');
+const canvas = require('canvas');
 
 const app = express();
 const PORT = 9090;
 
 // Middleware
+// Route untuk akses halaman scan.html
+app.get('/scan', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'scan.html'));
+});
+
 app.use(express.static('public'));
 app.use(bodyParser.json({ limit: '10mb' }));
+
+// Fungsi untuk memuat model dari disk
+async function loadFaceApiModels() {
+    const { Canvas, Image, ImageData } = canvas;
+    faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
+    
+    await faceapi.nets.ssdMobilenetv1.loadFromDisk('./models');
+    await faceapi.nets.faceLandmark68Net.loadFromDisk('./models');
+    await faceapi.nets.faceRecognitionNet.loadFromDisk('./models');
+    await faceapi.nets.ageGenderNet.loadFromDisk('./models');
+    await faceapi.nets.faceExpressionNet.loadFromDisk('./models');
+}
 
 // Endpoint: Daftar
 app.post('/daftar', (req, res) => {
@@ -39,31 +58,28 @@ app.post('/login', async (req, res) => {
 
     const registeredUsers = fs.readdirSync(path.join(__dirname, 'uploads')).filter(file => file !== 'temp.png');
     let matchFound = false;
+    let detectedInfo = {};
+
+    await loadFaceApiModels(); // Memuat model
 
     for (const userFile of registeredUsers) {
         const registeredImagePath = path.join(__dirname, 'uploads', userFile);
 
-        // Load face-api.js models (browser-compatible via tfjs-node in real use)
-        const faceapi = require('@vladmandic/face-api');
-        const canvas = require('canvas');
-
-        const { Canvas, Image, ImageData } = canvas;
-        faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
-
-        await faceapi.nets.ssdMobilenetv1.loadFromDisk('./models');
-        await faceapi.nets.faceLandmark68Net.loadFromDisk('./models');
-        await faceapi.nets.faceRecognitionNet.loadFromDisk('./models');
-
         const referenceImage = await canvas.loadImage(registeredImagePath);
         const queryImage = await canvas.loadImage(tempFilePath);
 
-        const refDescriptors = await faceapi.detectSingleFace(referenceImage).withFaceLandmarks().withFaceDescriptor();
-        const queryDescriptors = await faceapi.detectSingleFace(queryImage).withFaceLandmarks().withFaceDescriptor();
+        const refDescriptors = await faceapi.detectSingleFace(referenceImage).withFaceLandmarks().withFaceDescriptor().withAgeAndGender().withExpressions();
+        const queryDescriptors = await faceapi.detectSingleFace(queryImage).withFaceLandmarks().withFaceDescriptor().withAgeAndGender().withExpressions();
 
         if (refDescriptors && queryDescriptors) {
             const distance = faceapi.euclideanDistance(refDescriptors.descriptor, queryDescriptors.descriptor);
             if (distance < 0.6) {
                 matchFound = true;
+                detectedInfo = {
+                    age: queryDescriptors.age,
+                    gender: queryDescriptors.gender,
+                    expression: queryDescriptors.expressions.asSortedArray()[0].expression // Ekspresi wajah
+                };
                 break;
             }
         }
@@ -72,7 +88,10 @@ app.post('/login', async (req, res) => {
     fs.unlinkSync(tempFilePath);
 
     if (matchFound) {
-        res.send('Login berhasil!');
+        res.json({
+            message: 'Login berhasil!',
+            detectedInfo: detectedInfo
+        });
     } else {
         res.status(401).send('Wajah tidak cocok atau belum terdaftar.');
     }

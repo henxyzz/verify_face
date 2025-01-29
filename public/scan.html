@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyberpunk Face Scan</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #121212;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+            width: 80%;
+            max-width: 500px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+        h1 {
+            font-size: 2rem;
+            color: #00d2ff;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #00d2ff;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            color: #121212;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover {
+            background-color: #00aaff;
+        }
+        video {
+            width: 100%;
+            border-radius: 15px;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            background: #00d2ff;
+            color: #121212;
+            border-radius: 10px;
+            display: none;
+        }
+        .result-item {
+            margin: 10px 0;
+        }
+        .upload-btn {
+            background-color: #ff007f;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cyberpunk Face Scan</h1>
+        <video id="video" autoplay></video>
+        <br>
+        <button id="captureButton">Ambil Foto</button>
+        <div id="result">
+            <h2>Hasil Deteksi:</h2>
+            <div class="result-item" id="ageResult">Usia: </div>
+            <div class="result-item" id="genderResult">Jenis Kelamin: </div>
+            <div class="result-item" id="expressionResult">Ekspresi: </div>
+            <button class="upload-btn" id="uploadButton">Upload Foto</button>
+        </div>
+    </div>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api.js"></script>
+    <script>
+        let video = document.getElementById('video');
+        let captureButton = document.getElementById('captureButton');
+        let resultDiv = document.getElementById('result');
+        let uploadButton = document.getElementById('uploadButton');
+        
+        let ageResult = document.getElementById('ageResult');
+        let genderResult = document.getElementById('genderResult');
+        let expressionResult = document.getElementById('expressionResult');
+
+        // Fungsi untuk memulai kamera
+        async function setupCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+            video.srcObject = stream;
+        }
+
+        // Fungsi untuk memuat model face-api.js
+        async function loadFaceApiModels() {
+            await faceapi.nets.ssdMobilenetv1.loadFromDisk('../models');
+            await faceapi.nets.faceLandmark68Net.loadFromDisk('../models');
+            await faceapi.nets.faceRecognitionNet.loadFromDisk('../models');
+            await faceapi.nets.ageGenderNet.loadFromDisk('../models');
+            await faceapi.nets.faceExpressionNet.loadFromDisk('../models');
+        }
+
+        // Fungsi untuk menangkap foto
+        async function capturePhoto() {
+            const detections = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor().withAgeAndGender().withExpressions();
+            
+            if (detections) {
+                // Menampilkan hasil deteksi
+                resultDiv.style.display = 'block';
+                ageResult.textContent = 'Usia: ' + Math.round(detections.age);
+                genderResult.textContent = 'Jenis Kelamin: ' + detections.gender;
+                expressionResult.textContent = 'Ekspresi: ' + detections.expressions.asSortedArray()[0].expression;
+
+                // Menyimpan gambar untuk upload
+                const imageUrl = video.toDataURL('image/png');
+                uploadButton.onclick = () => uploadImage(imageUrl);
+            } else {
+                alert('Tidak ada wajah yang terdeteksi!');
+            }
+        }
+
+        // Fungsi untuk upload foto
+        async function uploadImage(imageUrl) {
+            const base64Image = imageUrl.replace(/^data:image\/png;base64,/, '');
+            
+            const response = await fetch('/upload', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image: base64Image }),
+            });
+
+            if (response.ok) {
+                alert('Foto berhasil di-upload!');
+            } else {
+                alert('Gagal upload foto.');
+            }
+        }
+
+        // Inisialisasi kamera dan model
+        setupCamera();
+        loadFaceApiModels();
+
+        // Event Listener untuk tombol ambil foto
+        captureButton.addEventListener('click', capturePhoto);
+    </script>
+</body>
+</html>
